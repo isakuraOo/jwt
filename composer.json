@@ -1,0 +1,24 @@
+{
+    "name": "isakura/jwt",
+    "description": "json-web-token",
+    "require": {
+        "php": ">=5.5.0"
+    },
+    "require-dev": {
+        "php": ">=5.5.0",
+        "phpunit/phpunit": "~5.7"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "iSakura",
+            "email": "i@joosie.cn"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Joosie\\JWT\\": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}

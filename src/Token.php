@@ -1,21 +1,45 @@
 <?php
 /**
  * @author Jackson <i@joosie.cn>
- * @since v1.0.0
  */
 namespace Joosie\JWT;
+
+use Joosie\JWT\Exceptions\TokenException;
 
 /**
 * 授权令牌 Token 处理类
 */
 class Token
 {
-    const SECRET_KEY = 'xWUCg1avJSvF3TLTEEk32I530lxsCaiS'; // 加密令牌签名的密钥
+    /**
+     * 令牌加密密钥
+     * @var string
+     */
+    private $secretKey = '';
 
-    const EXPIRE_TIME = 900; // 授权令牌的有效期时长
-    const REFRESH_TIME = 7200; // 刷新令牌的有效期时长
+    /**
+     * 授权令牌有效时长
+     * @var integer
+     */
+    private $expireTime = 900;
 
-    const DEFAULT_ALGO = 'sha256'; // 默认使用的 hash 方法
+    /**
+     * 刷新令牌有效时长
+     * @var integer
+     */
+    private $refreshTime = 7200;
+
+    /**
+     * token 加密使用的 hash 方法
+     * @var string
+     */
+    private $algo = 'sha256';
+
+    /**
+     * 支持的 Hash 算法
+     * @var array
+     */
+    private $allowAlgos = ['sha256', 'sha1'];
 
     /**
      * Token 令牌头部信息
@@ -53,14 +77,39 @@ class Token
 
     public function __construct(array $config = [])
     {
-        
+        if (!array_key_exists('secretKey', $config) || empty($config['secretKey'])) {
+            throw new TokenException('In JWT configure, [secretKey] is required!');
+        }
+        $this->secretKey = $config['secretKey'];
+
+        if (array_key_exists('expireTime', $config)) {
+            if (!is_numeric($config['expireTime'])) {
+                throw new TokenException('[expireTime] must be the type integer!');
+            }
+            $this->expireTime = $config['expireTime'];
+        }
+        if (array_key_exists('refreshTime', $config)) {
+            if (!is_numeric($config['refreshTime'])) {
+                throw new TokenException('[refreshTime] must be the type integer!');
+            }
+            if ($config['refreshTime'] <= $this->expireTime) {
+                throw new TokenException('In JWT configure, should set [refreshTime] more than [expireTime]!');
+            }
+            $this->refreshTime = $config['refreshTime'];
+        }
+        if (array_key_exists('algo', $config)) {
+            if (!in_array($config['algo'], $this->allowAlgos)) {
+                throw new TokenException('[algo] not in the allow list!');
+            }
+            $this->algo = $config['algo'];
+        }
     }
 
     /**
      * 设置令牌头部信息
      * @param array $header 头部信息数组
      */
-    public function setHeader( array $header )
+    public function setHeader(array $header)
     {
         $this->header = $header;
         return $this;
@@ -79,9 +128,9 @@ class Token
      * 设置令牌主体信息
      * @param array $payload 主体信息数组
      */
-    public function setPayload( array $payload )
+    public function setPayload(array $payload)
     {
-        ksort( $payload );
+        ksort($payload);
         $this->payload = $payload;
         return $this;
     }
@@ -99,7 +148,7 @@ class Token
      * 设置授权令牌
      * @param string $authorization 授权令牌
      */
-    public function setAuthorization( $authorization )
+    public function setAuthorization($authorization)
     {
         $this->authorization = $authorization;
         return $this;
@@ -119,10 +168,11 @@ class Token
      * @param string $key   属性名 header|payload|secret
      * @param string $value 属性值
      */
-    public function setAuthorizationOption( $key, $value )
+    public function setAuthorizationOption($key, $value)
     {
-        if ( isset( $this->authorizationOptions[$key] ) )
+        if (isset($this->authorizationOptions[$key])) {
             $this->authorizationOptions[$key] = $value;
+        }
         return $this;
     }
 
@@ -131,16 +181,16 @@ class Token
      * @param  string $key 属性名 header|payload|secret
      * @return string      属性值
      */
-    public function getAuthorizationOption( $key )
+    public function getAuthorizationOption($key)
     {
-        return isset( $this->authorizationOptions[$key] ) ? $this->authorizationOptions[$key] : null;
+        return isset($this->authorizationOptions[$key]) ? $this->authorizationOptions[$key] : null;
     }
 
     /**
      * 设置令牌属性
      * @param array $options 属性数组
      */
-    public function setAuthorizationOptions( array $options )
+    public function setAuthorizationOptions(array $options)
     {
         $this->authorizationOptions = $options;
         return $this;
@@ -161,15 +211,16 @@ class Token
      */
     public function getAuthorizationFromHeader()
     {
-        if ( isset( $_SERVER['PHP_AUTH_DIGEST'] ) )
+        if (isset($_SERVER['PHP_AUTH_DIGEST'])) {
             $authorization = $_SERVER['PHP_AUTH_DIGEST'];
-        elseif ( isset( $_SERVER['PHP_AUTH_USER'] ) && isset( $_SERVER['PHP_AUTH_PW'] ) )
-            $authorization = base64_encode( $_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW'] );
-        elseif ( isset( $_SERVER['HTTP_AUTHORIZATION'] ) )
+        } elseif (isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW'])) {
+            $authorization = base64_encode($_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
+        } elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
             $authorization = $_SERVER['HTTP_AUTHORIZATION'];
-        else
+        } else {
             $authorization = null;
-        return !empty( $authorization ) ? str_replace( 'Bearer ', '', $authorization ) : $authorization;
+        }
+        return !empty($authorization) ? str_replace('Bearer ', '', $authorization) : $authorization;
     }
 
     /**
@@ -178,7 +229,7 @@ class Token
     public function setAuthorizationToHeader()
     {
         $authorization = $this->getAuthorization();
-        header( 'Authorization: Bearer ' . $authorization );
+        header('Authorization: Bearer ' . $authorization);
         return $this;
     }
 
@@ -187,16 +238,18 @@ class Token
      * @param  array  $header  头部信息数组
      * @param  array  $payload 主体信息数组
      */
-    public function generateToken( $header = [], $payload = [] )
+    public function generateToken($header = [], $payload = [])
     {
-        if ( !empty( $header ) )
-            $this->setHeader( $header );
-        if ( !empty( $payload ) )
-            $this->setPayload( $payload );
+        if (!empty($header)) {
+            $this->setHeader($header);
+        }
+        if (!empty($payload)) {
+            $this->setPayload($payload);
+        }
 
         $time = time();
-        $this->payload['tokenExpiredAt'] = $time + self::EXPIRE_TIME;
-        $this->payload['refreshExpiredAt'] = $time + self::REFRESH_TIME;
+        $this->payload['tokenExpiredAt'] = $time + $this->expireTime;
+        $this->payload['refreshExpiredAt'] = $time + $this->refreshTime;
         $this->payload['refreshToken'] = $this->getRefreshToken();
         return $this->sign();
     }
@@ -208,13 +261,13 @@ class Token
     {
         $header = $this->getHeader();
         $payload = $this->getPayload();
-        $algo = isset( $header['algo'] ) ? $header['algo'] : self::DEFAULT_ALGO;
-        $options['header'] = base64_encode( json_encode( $header, true ) );
-        $options['payload'] = base64_encode( json_encode( $payload, true ) );
-        $data = $options['header'] . $options['payload'] . self::SECRET_KEY;
-        $options['secret'] = hash( $algo, $data );
-        return $this->setAuthorizationOptions( $options )
-            ->setAuthorization( implode( '.', $options ) );
+        $algo = isset($header['algo']) ? $header['algo'] : $this->algo;
+        $options['header'] = base64_encode(json_encode($header, true));
+        $options['payload'] = base64_encode(json_encode($payload, true));
+        $data = $options['header'] . $options['payload'] . $this->secretKey;
+        $options['secret'] = hash($algo, $data);
+        return $this->setAuthorizationOptions($options)
+            ->setAuthorization(implode('.', $options));
     }
 
     /**
@@ -223,8 +276,7 @@ class Token
      */
     private function getClientIp()
     {
-        // 偷懒直接用了框架自带方法。。。
-        return app( 'request' )->getClientIp();
+        return '127.0.0.1';
     }
 
     /**
@@ -237,7 +289,7 @@ class Token
         $payload = $this->getPayload();
         $refreshExpiredAt = $payload['refreshExpiredAt'];
         $ip = $this->getClientIp();
-        return md5( ip2long( $ip ) . $refreshExpiredAt );
+        return md5(ip2long($ip) . $refreshExpiredAt);
     }
 
     /**
@@ -247,17 +299,18 @@ class Token
     public function valid()
     {
         $authorization = $this->getAuthorizationFromHeader();
-        $tmpTokenArr = explode( '.', $authorization );
-        if ( !is_array( $tmpTokenArr ) || count( $tmpTokenArr ) != 3 )
+        $tmpTokenArr = explode('.', $authorization);
+        if (!is_array($tmpTokenArr) || count($tmpTokenArr) != 3) {
             return false;
+        }
 
-        list( $options['header'], $options['payload'], $options['secret'] ) = $tmpTokenArr;
-        $header = json_decode( base64_decode( $options['header'] ), true );
-        $payload = json_decode( base64_decode( $options['payload'] ), true );
-        $this->setAuthorization( $authorization )
-            ->setAuthorizationOptions( $options )
-            ->setHeader( $header )
-            ->setPayload( $payload );
+        list($options['header'], $options['payload'], $options['secret']) = $tmpTokenArr;
+        $header = json_decode(base64_decode($options['header']), true);
+        $payload = json_decode(base64_decode($options['payload']), true);
+        $this->setAuthorization($authorization)
+            ->setAuthorizationOptions($options)
+            ->setHeader($header)
+            ->setPayload($payload);
         return $this->checkSign() && $this->checkExpire();
     }
 
@@ -268,15 +321,16 @@ class Token
     private function checkSign()
     {
         $header = $this->getHeader();
-        $algo = isset( $header['algo'] ) ? $header['algo'] : self::DEFAULT_ALGO;
-        if ( !in_array( $algo, hash_algos() ) )
+        $algo = isset($header['algo']) ? $header['algo'] : $this->algo;
+        if (!in_array($algo, hash_algos())) {
             return false;
+        }
 
-        $data = $this->getAuthorizationOption( 'header' )
-            . $this->getAuthorizationOption( 'payload' )
-            . self::SECRET_KEY;
-        $sign = hash( $algo, $data );
-        return $sign === $this->getAuthorizationOption( 'secret' );
+        $data = $this->getAuthorizationOption('header')
+            . $this->getAuthorizationOption('payload')
+            . $this->secretKey;
+        $sign = hash($algo, $data);
+        return $sign === $this->getAuthorizationOption('secret');
     }
 
     /**
@@ -302,7 +356,7 @@ class Token
             $payload['tokenExpiredAt'] < $nowTime
             && $nowTime < $payload['refreshExpiredAt']
             && $this->checkRefreshToken()
-        ) {
+       ) {
             $this->generateToken()->setAuthorizationToHeader();
         }
     }
@@ -317,7 +371,7 @@ class Token
         $refreshToken = $payload['refreshToken'];
         $refreshExpiredAt = $payload['refreshExpiredAt'];
         $ip = $this->getClientIp();
-        return md5( ip2long( $ip ) . $refreshExpiredAt ) === $refreshToken;
+        return md5(ip2long($ip) . $refreshExpiredAt) === $refreshToken;
     }
 
 }
